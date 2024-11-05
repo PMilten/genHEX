@@ -19,48 +19,48 @@ def gnielinskiBlended(f):
 	ReMidPoint = 2700
 
 	#Heat transfer correlation for circular pipes
-	sigmoid = 1 / (1 + np.exp(-k * (f.Re - ReMidPoint)))
-	fLam = 64 / f.Re
+	sigmoid = 1 / (1 + np.exp(-k * (f.Re_mean[-1] - ReMidPoint)))
+	fLam = 64 / f.Re_mean[-1]
 	NuLam = 3.66
-	fTurb = (0.79 * np.log(f.Re) - 1.64) ** -2  # petukhov
-	NuTurb = ((fTurb / 8) * (f.Re - 1000) * f.Pr_mean) / (1 + 12.7 * ((fTurb / 8) ** 0.5) * (f.Pr_mean ** (2 / 3) - 1))  # gnielinski
+	fTurb = (0.79 * np.log(f.Re_mean[-1]) - 1.64) ** -2  # petukhov
+	NuTurb = ((fTurb / 8) * (f.Re_mean[-1] - 1000) * f.Pr_mean[-1]) / (1 + 12.7 * ((fTurb / 8) ** 0.5) * (f.Pr_mean[-1] ** (2 / 3) - 1))  # gnielinski
 	f.f = (1 - sigmoid) * fLam + sigmoid * fTurb
 	f.Nu = (1 - sigmoid) * NuLam + sigmoid * NuTurb
 
 	return f
 
-def Lienhard(f, L):
+def Lienhard(f, L, Afr, sigma):
 	# Method for integrating the boundary layer using correlations by Lienhard
 	#import sympy as sp
 	#x = sp.symbols('x')
 	#x = np.zeros((np.append(np.shape(f.sigma), 50)))
 	x = np.linspace(0.00001, L, 100)
 
-	f.u = f.mdot/(f.rho1*f.Afr*f.sigma)
-	f.Rex = np.multiply.outer(f.rho1/f.mu_mean*f.u, x)
+	f.u = f.mdot/(f.rho[-2]*Afr*sigma)
+	f.Rex = np.multiply.outer(f.rho[-2]/f.mu_mean[-1]*f.u, x)
 
 	upr_uinf = 0.1  # Turbulence intensity
 	Rel = 3.6*10**5*(100*upr_uinf)**(-5/4)
-	f.x_l = Rel*f.mu_mean/(f.rho1*f.u)
+	f.x_l = Rel*f.mu_mean[-1]/(f.rho[-2]*f.u)
 
 	# Laminar region
 	a = 0.332 #Uniform Wall Temperature
 	#a = 0.453 #Uniform Heat Flux
-	Nu_lam = a*f.Rex**(1/2)*f.Pr_mean[:,:,:,None]**(1/3)
-	f.h_lam = Nu_lam*f.k_mean[:, :, :, None]/x
-	f_lam = Nu_lam*2/f.Rex*f.Pr_mean[:,:,:,None]**(-1/3)
+	Nu_lam = a*f.Rex**(1/2)*f.Pr_mean[-1]**(1/3)
+	f.h_lam = Nu_lam*f.k_mean[-1]/x
+	f_lam = Nu_lam*2/f.Rex*f.Pr_mean[-1]**(-1/3)
 
 	# Transitional region
 	c = 0.9922*np.log10(Rel)-3.013 # For Rel < 5*10^5
-	Nu_trans = a*Rel**(1/2)*f.Pr_mean[:,:,:,None]**(1/3)*(f.Rex/Rel)**c
-	f_trans = Nu_trans*2/f.Rex*f.Pr_mean[:,:,:,None]**(-1/3)
+	Nu_trans = a*Rel**(1/2)*f.Pr_mean[-1]**(1/3)*(f.Rex/Rel)**c
+	f_trans = Nu_trans*2/f.Rex*f.Pr_mean[-1]**(-1/3)
 
 	# Turbulent region
 	f_turb = 0.455 / (np.log(0.06*f.Rex)**2)
-	Nu_turb = (f.Rex*f.Pr_mean[:, :, :, None]*f_turb/2) / (1+12.7*(f.Pr_mean[:,:,:,None]**(2/3)-1)*(f_turb/2)**(1/2))
+	Nu_turb = (f.Rex*f.Pr_mean[-1]*f_turb/2) / (1+12.7*(f.Pr_mean[-1]**(2/3)-1)*(f_turb/2)**(1/2))
 
 	f.Nu_x = (Nu_lam**5+(Nu_trans**(-10)+Nu_turb**(-10))**(-1/2))**(1/5)
-	f.h_x = f.Nu_x*f.k_mean[:, :, :, None]/x
+	f.h_x = f.Nu_x*f.k_mean[-1]/x
 
 	f.f_x = (f_lam**5+(f_trans**(-10)+f_turb**(-10))**(-1/2))**(1/5)
 
@@ -237,7 +237,7 @@ def get_sigma_alpha_sigmaFTT_Dh(HEX):
 
 def get_surfaceEfficiencies(HEX):
 	# Fin efficiency
-	HEX.f1_ml = HEX.FinAR*(2*HEX.f1_h/HEX.k)**0.5
+	HEX.f1_ml = HEX.FinAR*(2*HEX.f1_h_ave/HEX.k)**0.5
 	HEX.f1_eta_fin = np.tanh(HEX.f1_ml)/HEX.f1_ml
 
 	f1_finned = (HEX.f1_sigma_ftt*np.ones_like(HEX.f1_eta_fin))>=0
@@ -247,7 +247,7 @@ def get_surfaceEfficiencies(HEX):
 	HEX.f1_eta_O[f1_finned] = (1-HEX.f1_sigma_ftt*(1-HEX.f1_eta_fin))[f1_finned]
 	# -----------Where f2 is enhanced side-----------
 	# Fin efficiency
-	HEX.f2_ml = HEX.FinAR*(2*HEX.f2_h/HEX.k)**0.5
+	HEX.f2_ml = HEX.FinAR*(2*HEX.f2_h_ave/HEX.k)**0.5
 	HEX.f2_eta_fin = np.tanh(HEX.f2_ml)/HEX.f2_ml
 
 	f2_finned = (HEX.f2_sigma_ftt*np.ones_like(HEX.f2_eta_fin))>=0
@@ -421,17 +421,28 @@ def GenHex(f1, f2, HEX, verbose=True):
 		if HEX.correlation == "Gnielinski":
 			# Assume both sides as internal of tubes
 			f1 = gnielinskiBlended(f1)
+			HEX.f1_Nu = f1.Nu
+			HEX.f1_f = f1.f
 			f2 = gnielinskiBlended(f2)
+			HEX.f2_Nu = f2.Nu
+			HEX.f2_f = f2.f
 		elif HEX.correlation == "Lienhard":
 			# Assume both sides as flat plates
-			f1 = Lienhard(f1, HEX.Lx)
-			f2 = Lienhard(f2, HEX.Ly)
+			f1 = Lienhard(f1, HEX.Lx, HEX.f1_Afr, HEX.f1_sigma)
+			HEX.f1_Nu = f1.Nu
+			HEX.f1_f = f1.f
+			f2 = Lienhard(f2, HEX.Ly, HEX.f2_Afr, HEX.f2_sigma)
+			HEX.f2_Nu = f2.Nu
+			HEX.f2_f = f2.f
 		elif HEX.correlation == "KaysAndLondon":
 			HEX = KaysAndLondonHEX(HEX, f1, f2)
+		elif HEX.correlation == "KL":
+			HEX = KL_curvefit(HEX)
 		else:
 			# Both sides from Kays and London curve-fit correlation
 			# f1 = KL_curvefit(f1)
 			# f2 = KL_curvefit(f2)
+			print("Wrong correlation given, using the correlations derived from Kays and London")
 			HEX = KL_curvefit(HEX)
 
 		# Nusselt to heat transfer coefficient
@@ -545,14 +556,14 @@ HEX.k = 120
 HEX.density = 2840 # Alu 2219
 
 # What correlation to use for the aerothermal performance estimation, options are:
-# Gnielinski (internal channels)
-# Lienhard (flat plate)
+# Gnielinski (internal channels) (works ok)
+# Lienhard (flat plate) (broken)
 # KL (korrelations from Kays and London)
 # KaysAndLondon (specific heat exchanger from Kays and London library)
 # - Requires the KaysLondonCollection.xlsx
 # - HEX.f1_hex, HEX.f2_hex should be actual heat exchangers from the library
 # - HEX.f2_hex can be set to 'tube' if it is tube internal flow
-HEX.correlation = "KL"
+HEX.correlation = "Lienhard"
 # Undisturbed flow length (if tube internal a larger value should be used)
 HEX.f1_L = 0.01
 HEX.f2_L = 0.01
@@ -565,7 +576,7 @@ HEX.chi = np.linspace(0.1, 0.2, 10)
 # Reshaping all input to matrice form, should be used if more than 1 value is given as a vector
 ReshapeObjects([f1, f2, HEX])
 print("Number of configurations:", np.prod(HEX.listOfLens))
-print("Order of swept attributes", HEX.listOfSweepAttrs)
+print("Order of swept attributes:", HEX.listOfSweepAttrs)
 
 GenHex(f1, f2, HEX, verbose=False)
 
