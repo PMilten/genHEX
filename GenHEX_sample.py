@@ -563,7 +563,7 @@ HEX.density = 2840 # Alu 2219
 # - Requires the KaysLondonCollection.xlsx
 # - HEX.f1_hex, HEX.f2_hex should be actual heat exchangers from the library
 # - HEX.f2_hex can be set to 'tube' if it is tube internal flow
-HEX.correlation = "Lienhard"
+HEX.correlation = "KL"
 # Undisturbed flow length (if tube internal a larger value should be used)
 HEX.f1_L = 0.01
 HEX.f2_L = 0.01
